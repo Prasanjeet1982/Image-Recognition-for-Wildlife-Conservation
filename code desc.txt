@@ -1,0 +1,83 @@
+Below is an explanation of the main components of the Python code for the "Image Recognition for Wildlife Conservation" project. This explanation will focus on the key sections of the code, including data preprocessing, model creation, training, and inference using the trained model.
+
+```python
+# Import necessary libraries
+import os
+import tensorflow as tf
+from tensorflow.keras.applications import ResNet50
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from fastapi import FastAPI, UploadFile, File
+
+# Initialize the FastAPI app
+app = FastAPI()
+
+# Load pre-trained ResNet50 model for transfer learning
+base_model = ResNet50(weights='imagenet', include_top=False)
+
+# Create a custom model by adding new layers
+model = tf.keras.Sequential([
+    base_model,
+    tf.keras.layers.GlobalAveragePooling2D(),
+    tf.keras.layers.Dense(2, activation='softmax')
+])
+
+# Compile the model
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Load the saved model weights
+model.load_weights('model_weights.h5')
+
+# Create an endpoint to receive and predict images
+@app.post("/predict/")
+async def predict_wildlife(image: UploadFile):
+    # Save the uploaded image temporarily
+    image_path = f"temp_{image.filename}"
+    with open(image_path, "wb") as f:
+        f.write(image.file.read())
+    
+    # Preprocess the image for prediction
+    img = tf.keras.preprocessing.image.load_img(image_path, target_size=(224, 224))
+    img_array = tf.keras.preprocessing.image.img_to_array(img)
+    img_array = tf.expand_dims(img_array, 0)
+    img_array = tf.keras.applications.resnet50.preprocess_input(img_array)
+
+    # Make predictions
+    predictions = model.predict(img_array)
+    
+    # Decode the predictions and return the result
+    class_names = ['Not Wildlife', 'Wildlife']
+    result = {
+        "prediction": class_names[tf.argmax(predictions[0])],
+        "confidence": float(predictions[0][tf.argmax(predictions[0])])
+    }
+    
+    # Remove the temporary image file
+    os.remove(image_path)
+    
+    return result
+```
+
+Here's a breakdown of the code:
+
+1. Import necessary libraries, including TensorFlow, FastAPI, and related components.
+
+2. Initialize the FastAPI app using `FastAPI()`.
+
+3. Load a pre-trained ResNet50 model from Keras applications with pre-trained weights. This model is used for transfer learning.
+
+4. Create a custom model by adding a Global Average Pooling layer and a Dense layer with softmax activation.
+
+5. Compile the model with an optimizer and loss function.
+
+6. Load the saved model weights using `model.load_weights()`.
+
+7. Create a FastAPI endpoint (`/predict/`) to receive image uploads for prediction.
+
+8. In the `predict_wildlife` function:
+   - Save the uploaded image temporarily to a file.
+   - Preprocess the image for prediction using the same preprocessing steps as during training.
+   - Make predictions using the trained model.
+   - Decode the predictions and return the result along with the confidence score.
+   - Remove the temporary image file.
+
+Overall, this code sets up a FastAPI server that accepts image uploads, preprocesses the images, passes them through a trained ResNet50 model for inference, and returns the predicted class and confidence score. The code demonstrates how to create an API for wildlife image recognition using deep learning.
